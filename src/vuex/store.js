@@ -1,4 +1,4 @@
-import { reactive } from 'vue';
+import { reactive, watch } from 'vue';
 import { storeKey } from './injectKey';
 import ModuleCollection from './module/module-collection';
 import { forEachValue, isPromise } from './utils';
@@ -74,6 +74,18 @@ function resetStoreState(store, state) {
             enumerable: true
         })
     })
+
+    // 开启严格模式 监控state的变化
+    if(store.strict){
+        enableStrictMode(store)
+    }
+}
+
+// 监控state
+function enableStrictMode(store){
+    watch(()=> store._state.data, ()=>{// 监控数据变变化，数据变化后执行回调函数  effect
+        console.assert(store._commiting, "不能在mutation外面修改state")
+    },{deep: true, flush: 'sync'}) // 默认watchApi是异步的，这里改成同步的监控
 }
 // 创建容器  返回store
 export default class Store {
@@ -87,6 +99,21 @@ export default class Store {
         store._wrappedGetters = Object.create(null);
         store._mutations = Object.create(null);
         store._actions = Object.create(null);
+
+
+        this.strict = options.strict || false; // 是不是严格模式
+
+        // 调用的时候，直到是mutation，mutation里面得写同步代码 而且state的值只能通过mutation修改
+        this._commiting = false;
+        /**
+         * 在mutation之前添加一个状态，_commiting = true
+         * 调用mutation => 更改状态， 监控这个状态，如果当前状态变化的时候，_commiting = true，同步修改
+         * 修改完毕后 _commiting = false 
+         * 如果_commiting = false，状态发生了改变，则为非法修改
+         * 
+         * 将commit的执行方法用函数进行包裹
+         */
+
         // 定义状态
         const state = store._modules.root.state; // 根状态
 
@@ -101,9 +128,19 @@ export default class Store {
         return this._state.data
     }
 
+    _withCommit(fn){ // 切片模式编程
+        const commiting = this._commiting;
+        this._commiting = true;
+        // 只有在fn中修改状态才是合法的操作
+        fn();
+        this._commiting = commiting;
+    }
+
     commit = (type, payload) => {
-        const entry = this._mutations[type] || []
-        entry.forEach(handler => handler(payload))
+        const entry = this._mutations[type] || [];
+        this._withCommit(()=>{
+            entry.forEach(handler => handler(payload))
+        })
     }
     dispatch = (type, payload) => {
         const entry = this._actions[type] || []
