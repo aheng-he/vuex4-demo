@@ -10,6 +10,8 @@ function getNestedState(state, path) { // 根据路径 获取store.上面的最�
 function installModule(store, rootState, path, module) { // 递归安装
     let isRoot = !path.length;  // 如果数组是空数组 说明是根，否则不是
 
+
+    const namespaced = store._modules.getNamespaced(path)
     // rootState = {
     //     state: state,
     //     a:{
@@ -26,19 +28,16 @@ function installModule(store, rootState, path, module) { // 递归安装
         parentState[path[path.length - 1]] = module.state
     }
 
-    module.forEachValue((child, key) => {
-        installModule(store, rootState, path.concat(key), child)
-    })
-
+ 
     module.forEachGetter((getter, key) => {  // {double: function(state){}}
-        store._wrappedGetters[key] = () => {
+        store._wrappedGetters[namespaced + key] = () => {
             // store.state 使用store.state是因为module.state不是响应式的
             return getter(getNestedState(store.state, path))
         }
     })
     // mutation   {add:[mutation]}
     module.forEachMutation((mutation, key) => {
-        const entry = store._mutations[key] || (store._mutations[key] = [])
+        const entry = store._mutations[namespaced + key] || (store._mutations[namespaced + key] = [])
         entry.push((payload) => {  // store.commit("add", payload)
             mutation.call(store, getNestedState(store.state, path), payload)
         })
@@ -46,7 +45,7 @@ function installModule(store, rootState, path, module) { // 递归安装
 
     // actions mutation和action的一个区别， action执行后返回一个是promise 
     module.forEachAction((action, key) => {
-        const entry = store._actions[key] || (store._actions[key] = [])
+        const entry = store._actions[namespaced + key] || (store._actions[namespaced + key] = [])
         entry.push((payload) => {
             let res = action.call(store, store, payload)
             // 判断res是否为一个promise
@@ -56,6 +55,11 @@ function installModule(store, rootState, path, module) { // 递归安装
             return res
         })
     })
+
+    module.forEachValue((child, key) => {
+        installModule(store, rootState, path.concat(key), child)
+    })
+
 
 }
 

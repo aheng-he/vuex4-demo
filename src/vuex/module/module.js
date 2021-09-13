@@ -5,6 +5,7 @@ export default class Module{
         this._raw = rawModule;
         this._children = {};
         this.state = rawModule.state
+        this.namespaced = rawModule.namespaced;
     }
 
     getChild(key){
