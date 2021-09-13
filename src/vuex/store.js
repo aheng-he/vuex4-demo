@@ -25,7 +25,11 @@ function installModule(store, rootState, path, module) { // 递归安装
 
     if (!isRoot) {
         let parentState = path.slice(0, -1).reduce((state, key) => state[key], rootState)
-        parentState[path[path.length - 1]] = module.state
+        // registerModule 注册模块的时候会直接修改state
+        store._withCommit(() => {
+            parentState[path[path.length - 1]] = module.state;
+        })
+
     }
 
  
@@ -171,6 +175,20 @@ export default class Store {
         // Vue2.x Vue.prototype.$store = this
         app.config.globalProperties.$store = this; // 增添$store属性 使得可以直接在模板中使用 $store.state.count
 
+    }
+
+    // path = aModule || ['aModule', "cModule"]
+    registerModule(path, rawModule){ 
+        const store = this;
+
+        if(typeof path == 'string') path = [path]
+
+        // 在原有的模块的基础上，新增加一个
+        const newModule = store._modules.register(rawModule, path)
+        // 安装模块
+        installModule(store, store.state, path, newModule)
+        // 重置容器
+        resetStoreState(store, store.state)
     }
 }
 
