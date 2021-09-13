@@ -121,7 +121,16 @@ export default class Store {
         // 重置Store的状态
         resetStoreState(store, state);
 
+        // 注册插件
+        store._subscribes = [];
+        // 状态初始化完成后，依次调用插件执行
+        options.plugins.forEach(plugin => plugin(store))
 
+    }
+
+    // 添加事件订阅方法 commit 执行的时候，执行订阅的方法
+    subscribe(fn){
+        this._subscribes.push(fn)
     }
 
     get state() {
@@ -136,11 +145,20 @@ export default class Store {
         this._commiting = commiting;
     }
 
+    // 替换当前store的state
+    replaceState(newState) {
+        // 严格模式下 不能直接修改状态
+        this._withCommit(() => {
+            this._state.data = newState;
+        });
+    }
+
     commit = (type, payload) => {
         const entry = this._mutations[type] || [];
         this._withCommit(()=>{
             entry.forEach(handler => handler(payload))
         })
+        this._subscribes.forEach(sub => sub({ type, payload }, this.state))
     }
     dispatch = (type, payload) => {
         const entry = this._actions[type] || []
